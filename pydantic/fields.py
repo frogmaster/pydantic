@@ -1,4 +1,5 @@
 import warnings
+import devtools
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -60,6 +61,7 @@ class FieldInfo(Representation):
         'alias',
         'title',
         'description',
+        'determinant',
         'const',
         'gt',
         'ge',
@@ -79,6 +81,7 @@ class FieldInfo(Representation):
         self.alias = kwargs.pop('alias', None)
         self.title = kwargs.pop('title', None)
         self.description = kwargs.pop('description', None)
+        self.determinant = kwargs.pop('determinant', None)
         self.const = kwargs.pop('const', None)
         self.gt = kwargs.pop('gt', None)
         self.ge = kwargs.pop('ge', None)
@@ -99,6 +102,7 @@ def Field(
     alias: str = None,
     title: str = None,
     description: str = None,
+    determinant: str = None,
     const: bool = None,
     gt: float = None,
     ge: float = None,
@@ -145,6 +149,7 @@ def Field(
         alias=alias,
         title=title,
         description=description,
+        determinant=determinant,
         const=const,
         gt=gt,
         ge=ge,
@@ -601,9 +606,30 @@ class ModelField(Representation):
         else:
             return result, None
 
+    def _get_sub_field_by_determinant(self, v: Any):
+        from .main import BaseModel
+        determinant_key = self.field_info.determinant
+        determinant_value = v.get(self.field_info.determinant)
+        for field in self.sub_fields:
+            if issubclass(field.type_, BaseModel):
+                if field.type_.__fields__.get(determinant_key).default == determinant_value:
+                    return field
+        raise ValueError(f"Unable to determine Class using determinant {determinant_key} with value {determinant_value}")
+
+
     def _validate_singleton(
         self, v: Any, values: Dict[str, Any], loc: 'LocStr', cls: Optional['ModelOrDc']
     ) -> 'ValidateReturn':
+        if self.field_info and self.field_info.determinant:
+            try:
+                field = self._get_sub_field_by_determinant(v)
+            except ValueError as exc:
+                return v, ErrorWrapper(exc, loc)
+            value, error = field.validate(v, values, loc=loc, cls=cls)
+            if error:
+                return value, [error]
+            return value, None
+
         if self.sub_fields:
             errors = []
             for field in self.sub_fields:
