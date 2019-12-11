@@ -1,6 +1,7 @@
 import json
 import pickle
 from typing import List, Union
+from typing_extensions import Literal
 
 import pytest
 
@@ -136,7 +137,6 @@ def test_file_pickle_no_ext(tmpdir):
     p.write_binary(pickle.dumps(dict(a=12, b=8)))
     assert Model.parse_file(str(p), content_type='application/pickle', allow_pickle=True) == Model(a=12, b=8)
 
-
 def test_const_differentiates_union():
     class SubModelA(BaseModel):
         key: str = Field('A', const=True)
@@ -147,7 +147,48 @@ def test_const_differentiates_union():
         foo: int
 
     class Model(BaseModel):
-        a: Union[SubModelA, SubModelB]
+        a: Union[SubModelA, SubModelB] = Field(None, description="BLABLA", determinant="key")
 
     m = Model.parse_obj({'a': {'key': 'B', 'foo': 3}})
     assert isinstance(m.a, SubModelB)
+
+def test_const_differentiates_union_with_determinant():
+    class SubModelA(BaseModel):
+        key: str = Field('A', const=True)
+        foo: int
+
+    class SubModelB(BaseModel):
+        key: str = Field('B', const=True)
+        foo: int
+
+    class SubModelC(BaseModel):
+        key: str = Field('C', const=True)
+        foo: int
+
+
+    class Model(BaseModel):
+        a: Union[SubModelA, SubModelB, SubModelC] = Field(None, description="BLABLA", determinant="key")
+
+    m = Model.parse_obj({'a': {'key': 'C', 'foo': 3}})
+    assert isinstance(m.a, SubModelC)
+
+
+def test_const_differentiates_union_with_determinant_2():
+    class SubModelA(BaseModel):
+        key: Literal['A'] = 'A'
+        foo: int
+
+    class SubModelB(BaseModel):
+        key: Literal['B'] = 'B'
+        foo: int
+
+    class SubModelC(BaseModel):
+        key: Literal['C'] = 'C'
+        foo: int
+
+
+    class Model(BaseModel):
+        a: Union[SubModelA, SubModelB, SubModelC] = Field(None, description="BLABLA", determinant="key")
+
+    m = Model.parse_obj({'a': {'key': 'C', 'foo': 3}})
+    assert isinstance(m.a, SubModelC)
